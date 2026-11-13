@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "due-diligence-agentes"
+version = "0.1.0"
+description = "Sistema multiagente de due diligence de empresas brasileiras com Ollama e o servidor MCP mcp-brasil."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Arthur Pereira" }]
+requires-python = ">=3.10"
+dependencies = []
+keywords = ["agents", "multi-agent", "llm", "ollama", "mcp", "due-diligence", "cnpj", "brasil"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Natural Language :: Portuguese (Brazilian)",
+  "Topic :: Office/Business",
+]
+
+[project.urls]
+Repository = "https://github.com/Arthurpereiraa/due-diligence-agentes"
+
+[project.scripts]
+diligencia = "due_diligence.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 130
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]  # o ruff format cuida do tamanho das linhas de código
