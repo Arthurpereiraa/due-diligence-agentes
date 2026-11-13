@@ -1,5 +1,5 @@
 from due_diligence.agentes import Revisor
-from due_diligence.agentes.revisor import verificar_fatos
+from due_diligence.agentes.revisor import verificar_fatos, verificar_formato
 from due_diligence.llm import LLMError
 from due_diligence.relatorio import brl, data_br
 from due_diligence.risco import analisar
@@ -11,7 +11,8 @@ ANALISE = analisar(DOSSIE, HOJE)
 BOM = (
     "A empresa está ativa desde 01/01/2010 e possui capital social de R$ 500.000,00, compatível com o porte informado. "
     "Não foram encontrados alertas nos dados públicos, e o risco geral é baixo.\n\n"
-    "**Recomendações:**\n- Solicitar as certidões negativas antes de contratar."
+    "**Recomendações:**\n- Solicitar as certidões negativas antes de contratar.\n"
+    "- Consultar protestos e processos judiciais em nome da empresa."
 )
 
 
@@ -68,3 +69,50 @@ def test_revisor_ignora_resposta_invalida_e_falha_do_llm():
             raise LLMError("offline")
 
     assert Revisor(Quebrado()).revisar(BOM, DOSSIE, ANALISE).aprovado is True
+
+
+# Trecho real gerado pelo llama3.2:3b no primeiro teste com o Banco do Brasil (13/11/2026).
+GERADO_PELO_3B = (
+    "**Parecer de Due Diligence de Fornecedor**\n\n"
+    "A análise dos dados públicos não apresentou nenhum alerta significativo. O nível de risco geral calculado é baixo, "
+    "considerando a estabilidade financeira e a longa história da empresa.\n\n"
+    "**Recomendações:**\n\n"
+    "* Verificar a transparência e a clareza nas contas financeiras da empresa.\n"
+    "* Analisar a diversificação da carteira comercial e a gestão de riscos.\n"
+    "* Avaliar a eficácia da gestão de recursos humanos e a motivação dos funcionários.\n"
+    "* Verificar a conformidade da empresa com as normas e regulamentações aplicáveis.\n"
+    "* Considerar a possibilidade de auditorias adicionais."
+)
+
+
+def test_pega_os_problemas_do_parecer_real_do_modelo_3b():
+    problemas = " | ".join(verificar_fatos(GERADO_PELO_3B, DOSSIE, ANALISE))
+    assert "estabilidade financeira" in problemas
+    assert "carteira comercial" in problemas
+    assert "recursos humanos" in problemas
+    assert "começa com um título" in problemas
+    assert "5 recomendações" in problemas
+
+
+def test_termo_permitido_quando_esta_nos_fatos_ou_sugestoes():
+    # O alerta de MEI e a recomendação sugerida falam em "faturamento", então o redator pode usar a palavra.
+    dossie_mei = {**empresa(opcao_pelo_mei=True), "cnpj": "11.222.333/0001-81"}
+    analise_mei = analisar(dossie_mei, HOJE)
+    texto = BOM.replace("o risco geral é baixo", "o risco geral é médio") + "\nAtenção ao limite de faturamento do MEI."
+    assert not any("faturamento" in p for p in verificar_fatos(texto, dossie_mei, analise_mei))
+    assert any("faturamento" in p for p in verificar_fatos(BOM + " O faturamento é alto.", DOSSIE, ANALISE))
+
+
+def test_formato_das_recomendacoes():
+    assert verificar_formato(BOM) == []
+    assert any("Falta a seção" in p for p in verificar_formato("Texto sem recomendações. " * 5))
+    um_item = BOM.split("- Consultar")[0]
+    assert any("1 recomendações" in p for p in verificar_formato(um_item))
+    numeradas = BOM.replace("- Solicitar", "1. Solicitar").replace("- Consultar", "2) Consultar")
+    assert verificar_formato(numeradas) == []
+
+
+def test_titulo_no_inicio():
+    assert any("título" in p for p in verificar_formato("# Parecer\n\n" + BOM))
+    assert any("título" in p for p in verificar_formato("**Parecer de Due Diligence**\n\n" + BOM))
+    assert not any("título" in p for p in verificar_formato("**A empresa** está ativa.\n\n" + BOM))

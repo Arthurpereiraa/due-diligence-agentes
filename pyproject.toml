@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "due-diligence-agentes"
-version = "0.1.0"
+version = "0.1.1"
 description = "Sistema multiagente de due diligence de empresas brasileiras com Ollama e o servidor MCP mcp-brasil."
 readme = "README.md"
 license = "MIT"

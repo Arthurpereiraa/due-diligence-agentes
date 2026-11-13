@@ -37,6 +37,30 @@ class AnaliseRisco:
         return {**asdict(self), "nivel_geral_nome": self.nivel_geral_nome}
 
 
+RECOMENDACOES_PADRAO = [
+    "Solicitar as certidões negativas de débitos (CND federal, FGTS e trabalhista).",
+    "Consultar protestos e processos judiciais em nome da empresa.",
+]
+
+RECOMENDACOES_POR_ALERTA = {
+    "situacao_irregular": "Não formalizar a contratação até a empresa regularizar a situação cadastral na Receita Federal.",
+    "empresa_muito_nova": "Exigir garantias contratuais ou pagamento vinculado à entrega, por se tratar de empresa recém-aberta.",
+    "empresa_nova": "Pedir referências de clientes atuais, já que a empresa tem pouco histórico.",
+    "situacao_mudou": "Entender o motivo da mudança recente na situação cadastral antes de contratar.",
+    "mei": "Confirmar se o valor do contrato é compatível com o limite anual de faturamento do MEI.",
+    "capital_baixo": "Avaliar se o capital social é compatível com o porte e o valor do contrato pretendido.",
+    "endereco_inconsistente": "Confirmar o endereço de funcionamento (comprovante ou visita), pois o CEP não corresponde ao município.",
+    "sem_contato": "Obter e validar um e-mail e um telefone de contato oficiais da empresa.",
+    "sem_socios": "Solicitar o contrato social atualizado para identificar os sócios e administradores.",
+}
+
+
+def recomendacoes(analise: AnaliseRisco) -> list[str]:
+    """Recomendações concretas, derivadas dos alertas, que o redator adapta em vez de inventar."""
+    especificas = [RECOMENDACOES_POR_ALERTA[a.codigo] for a in analise.alertas if a.codigo in RECOMENDACOES_POR_ALERTA]
+    return list(dict.fromkeys(especificas + RECOMENDACOES_PADRAO))[:4]
+
+
 def _data(valor: Any) -> date | None:
     try:
         return date.fromisoformat(str(valor)[:10])

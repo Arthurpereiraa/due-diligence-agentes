@@ -1,8 +1,9 @@
 """Agente revisor: confere se o parecer do redator é fiel aos fatos.
 
 Duas camadas:
-1. Verificação determinística: todo CNPJ, data e valor em R$ citado no texto precisa existir nos fatos,
-   e o nível de risco mencionado precisa ser o calculado.
+1. Verificação determinística: todo CNPJ, data e valor em R$ citado no texto precisa existir nos fatos;
+   o nível de risco mencionado precisa ser o calculado; o texto não pode falar de assuntos que os dados
+   não cobrem (finanças, funcionários, reputação...); e precisa seguir o formato (sem título, 2 a 4 recomendações).
 2. Revisão por LLM: pede ao modelo que aponte afirmações sem respaldo nos fatos (resposta em JSON).
 """
 
@@ -14,7 +15,7 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
-from due_diligence.agentes.redator import montar_contexto
+from due_diligence.agentes.redator import montar_contexto, montar_pedido
 from due_diligence.llm import LLM, LLMError
 from due_diligence.risco import AnaliseRisco
 
@@ -23,6 +24,8 @@ SISTEMA = """Você revisa pareceres de due diligence. Compare o PARECER com os F
 Aponte somente problemas reais:
 - afirmações que não estão nos fatos ou que os contradizem;
 - nível de risco diferente do informado;
+- comentários sobre saúde financeira, faturamento, funcionários, reputação ou mercado (os dados não trazem isso);
+- recomendações genéricas, sem relação com os alertas ou com a contratação de um fornecedor;
 - acusações de fraude ou juízo de intenção.
 
 Responda apenas com JSON no formato: {"aprovado": true ou false, "problemas": ["descrição curta de cada problema"]}
@@ -32,6 +35,30 @@ RE_CNPJ = re.compile(r"\b[0-9A-Z]{2}\.[0-9A-Z]{3}\.[0-9A-Z]{3}/[0-9A-Z]{4}-\d{2}
 RE_DATA = re.compile(r"\b\d{2}/\d{2}/\d{4}\b")
 RE_REAIS = re.compile(r"R\$\s?\d{1,3}(?:\.\d{3})*(?:,\d{2})?")
 RE_NIVEL = re.compile(r"risco(?:\s+geral)?\s*(?:é|e|:|de|foi\s+classificado\s+como|classificado\s+como)?\s*(baixo|medio|alto)\b")
+
+
+# Assuntos que os dados públicos do CNPJ não cobrem. Se aparecerem no parecer sem estar nos fatos
+# nem nas recomendações sugeridas, o modelo inventou.
+TERMOS_SEM_BASE = [
+    "estabilidade financeira",
+    "saude financeira",
+    "solidez financeira",
+    "situacao financeira",
+    "faturamento",
+    "lucro",
+    "receita anual",
+    "funcionarios",
+    "colaboradores",
+    "recursos humanos",
+    "reputacao",
+    "qualidade do servico",
+    "qualidade dos servicos",
+    "lider de mercado",
+    "participacao de mercado",
+    "carteira comercial",
+]
+RE_ITEM = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+\S")
+RE_TITULO = re.compile(r"^(#+\s|\*\*[^*]+\*\*:?\s*$)")
 
 
 @dataclass
@@ -69,6 +96,32 @@ def verificar_fatos(parecer: str, dossie: dict[str, Any], analise: AnaliseRisco)
         if citado != esperado:
             problemas.append(f"O parecer menciona risco {citado}, mas o risco geral calculado é {analise.nivel_geral_nome}.")
 
+    texto = _sem_acento(parecer)
+    permitido = _sem_acento(montar_pedido(dossie, analise))
+    for termo in TERMOS_SEM_BASE:
+        if termo in texto and termo not in permitido:
+            problemas.append(f'O parecer fala de "{termo}", mas os dados não trazem essa informação. Remova esse comentário.')
+
+    problemas.extend(verificar_formato(parecer))
+    return problemas
+
+
+def verificar_formato(parecer: str) -> list[str]:
+    linhas = [linha.strip() for linha in parecer.strip().splitlines() if linha.strip()]
+    if not linhas:
+        return []
+    problemas = []
+
+    if RE_TITULO.match(linhas[0]) and "recomenda" not in _sem_acento(linhas[0]):
+        problemas.append("O parecer começa com um título; comece direto no primeiro parágrafo.")
+
+    inicio = next((i for i, linha in enumerate(linhas) if _sem_acento(linha).strip("*: ").startswith("recomendacoes")), None)
+    if inicio is None:
+        problemas.append('Falta a seção "**Recomendações:**" com 2 a 4 itens.')
+    else:
+        itens = [linha for linha in linhas[inicio + 1 :] if RE_ITEM.match(linha)]
+        if not 2 <= len(itens) <= 4:
+            problemas.append(f"O parecer tem {len(itens)} recomendações; use de 2 a 4.")
     return problemas
 
 
