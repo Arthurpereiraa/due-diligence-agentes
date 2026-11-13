@@ -3,7 +3,8 @@ from due_diligence.orquestrador import Orquestrador
 
 PARECER_BOM = (
     "A Empresa Exemplo opera desde 10/03/2005, com capital social de R$ 500.000,00, e não apresenta alertas "
-    "nos dados públicos consultados. O risco geral é baixo.\n\n**Recomendações:**\n- Solicitar certidões negativas."
+    "nos dados públicos consultados. O risco geral é baixo.\n\n**Recomendações:**\n- Solicitar certidões negativas.\n"
+    "- Consultar protestos e processos judiciais."
 )
 PARECER_RUIM = PARECER_BOM.replace("O risco geral é baixo", "O risco geral é alto")
 
@@ -56,3 +57,12 @@ def test_comparativo_com_varios_cnpjs(mcp):
     assert "## Comparativo" in md
     assert "EMPRESA EXEMPLO LTDA" in md and "🟢 Baixo" in md
     assert "❌" in md
+
+
+def test_redator_recebe_recomendacoes_sugeridas_pelos_alertas(mcp, fake_llm_cls):
+    llm = fake_llm_cls(redator=[PARECER_BOM.replace("baixo", "alto")])
+    Orquestrador(mcp, llm=llm, hoje=HOJE, max_revisoes=0).analisar(CNPJ_RISCO)
+    pedido = next(c for c in llm.chamadas if c["messages"][0]["content"].startswith("Você é analista"))["messages"][1]["content"]
+    assert "RECOMENDAÇÕES SUGERIDAS" in pedido
+    assert "limite anual de faturamento do MEI" in pedido
+    assert "Confirmar o endereço" in pedido

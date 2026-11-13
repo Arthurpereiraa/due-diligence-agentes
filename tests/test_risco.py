@@ -1,6 +1,6 @@
 from datetime import date
 
-from due_diligence.risco import analisar, idade_por_extenso, meses_entre
+from due_diligence.risco import RECOMENDACOES_PADRAO, analisar, idade_por_extenso, meses_entre, recomendacoes
 
 HOJE = date(2026, 11, 13)
 
@@ -83,3 +83,11 @@ def test_datas_auxiliares():
     assert idade_por_extenso(0) == "0 meses"
     assert idade_por_extenso(13) == "1 ano e 1 mês"
     assert idade_por_extenso(24) == "2 anos"
+
+
+def test_recomendacoes_derivadas_dos_alertas():
+    assert recomendacoes(analisar(empresa(), HOJE)) == RECOMENDACOES_PADRAO
+    recs = recomendacoes(analisar(empresa(descricao_situacao_cadastral="INAPTA", opcao_pelo_mei=True), HOJE))
+    assert recs[0].startswith("Não formalizar")
+    assert any("MEI" in r for r in recs)
+    assert len(recs) <= 4
