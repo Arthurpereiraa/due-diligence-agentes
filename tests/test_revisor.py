@@ -116,3 +116,39 @@ def test_titulo_no_inicio():
     assert any("título" in p for p in verificar_formato("# Parecer\n\n" + BOM))
     assert any("título" in p for p in verificar_formato("**Parecer de Due Diligence**\n\n" + BOM))
     assert not any("título" in p for p in verificar_formato("**A empresa** está ativa.\n\n" + BOM))
+
+
+# Parecer real gerado pelo llama3.2:3b na v0.1.1 (já sem termos financeiros, mas prolixo).
+GERADO_V011 = (
+    "Banco do Brasil S.A.\n\n"
+    "O Banco do Brasil S.A. apresenta uma situação geral de baixo nível de risco, considerando a duração de sua existência.\n\n"
+    "A empresa tem uma longa história de operações. É fundamental realizar uma análise mais aprofundada para identificar riscos.\n\n"
+    "A recomendação de solicitar as certidões negativas é particularmente importante para identificar dívidas.\n\n"
+    "É importante lembrar que a análise de risco é um processo contínuo e que a situação pode mudar.\n\n"
+    "**Recomendações:**\n"
+    "- Solicitar as certidões negativas de débitos (CND federal, FGTS e trabalhista).\n"
+    "- Consultar protestos e processos judiciais em nome da empresa.\n"
+    "- Realizar uma análise regular para garantir que continue a ser uma boa opção para investidores e clientes."
+)
+
+
+def test_pega_os_problemas_do_parecer_real_da_v011():
+    problemas = " | ".join(verificar_fatos(GERADO_V011, DOSSIE, ANALISE))
+    assert "começa com um título" in problemas
+    assert "4 parágrafos" in problemas
+    assert "investidores" in problemas
+    assert "processo continuo" in problemas
+    assert "analise mais aprofundada" in problemas
+
+
+def test_paragrafos_dentro_do_limite_passam():
+    tres = (
+        "Primeiro parágrafo com conteúdo.\n\nSegundo parágrafo.\n\nTerceiro parágrafo.\n\n" + BOM.split("**Recomendações:**")[1]
+    )
+    tres = tres.replace("\n- Solicitar", "**Recomendações:**\n- Solicitar", 1)
+    assert not any("parágrafos" in p for p in verificar_formato(tres))
+
+
+def test_titulo_simples_com_nome_da_empresa():
+    assert any("título" in p for p in verificar_formato("Banco do Brasil S.A.\n\n" + BOM))
+    assert any("título" in p for p in verificar_formato("Análise do fornecedor\n\n" + BOM))

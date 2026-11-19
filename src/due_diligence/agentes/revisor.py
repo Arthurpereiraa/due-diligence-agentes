@@ -57,6 +57,15 @@ TERMOS_SEM_BASE = [
     "participacao de mercado",
     "carteira comercial",
 ]
+# Frases que não dizem nada sobre contratar este fornecedor (vieram do 2º teste real com o llama3.2:3b).
+FRASES_GENERICAS = [
+    "investidores",
+    "boa opcao para",
+    "processo continuo",
+    "analise mais aprofundada",
+    "analise regular",
+]
+MAX_PARAGRAFOS = 3
 RE_ITEM = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+\S")
 RE_TITULO = re.compile(r"^(#+\s|\*\*[^*]+\*\*:?\s*$)")
 
@@ -102,8 +111,26 @@ def verificar_fatos(parecer: str, dossie: dict[str, Any], analise: AnaliseRisco)
         if termo in texto and termo not in permitido:
             problemas.append(f'O parecer fala de "{termo}", mas os dados não trazem essa informação. Remova esse comentário.')
 
+    for frase in FRASES_GENERICAS:
+        if frase in texto and frase not in permitido:
+            problemas.append(
+                f'Trecho genérico ("{frase}") sem relação com a contratação deste fornecedor. Seja específico ou remova.'
+            )
+
     problemas.extend(verificar_formato(parecer))
     return problemas
+
+
+def _parece_titulo(linha: str) -> bool:
+    """Título explícito (# ou **...**) ou linha curta que só nomeia algo, como "Banco do Brasil S.A."."""
+    if RE_TITULO.match(linha) and "recomenda" not in _sem_acento(linha):
+        return True
+    texto = linha.strip("*# ").strip()
+    if not texto or RE_ITEM.match(linha):
+        return False
+    curta_sem_ponto_final = len(texto) <= 60 and texto[-1] not in ".:;!?"
+    so_o_nome = len(texto.split()) <= 6 and texto.endswith(("S.A.", "LTDA.", "Ltda.", "EIRELI.", "ME."))
+    return curta_sem_ponto_final or so_o_nome
 
 
 def verificar_formato(parecer: str) -> list[str]:
@@ -112,7 +139,7 @@ def verificar_formato(parecer: str) -> list[str]:
         return []
     problemas = []
 
-    if RE_TITULO.match(linhas[0]) and "recomenda" not in _sem_acento(linhas[0]):
+    if _parece_titulo(linhas[0]):
         problemas.append("O parecer começa com um título; comece direto no primeiro parágrafo.")
 
     inicio = next((i for i, linha in enumerate(linhas) if _sem_acento(linha).strip("*: ").startswith("recomendacoes")), None)
@@ -122,6 +149,16 @@ def verificar_formato(parecer: str) -> list[str]:
         itens = [linha for linha in linhas[inicio + 1 :] if RE_ITEM.match(linha)]
         if not 2 <= len(itens) <= 4:
             problemas.append(f"O parecer tem {len(itens)} recomendações; use de 2 a 4.")
+
+    corpo = parecer.strip()
+    corte = _sem_acento(corpo).find("recomendacoes")
+    blocos = [b for b in re.split(r"\n\s*\n", corpo[: corte if corte >= 0 else None]) if b.strip("*:# \n")]
+    if blocos and _parece_titulo(blocos[0].strip().splitlines()[0]) and len(blocos[0].strip().splitlines()) == 1:
+        blocos = blocos[1:]
+    if len(blocos) > MAX_PARAGRAFOS:
+        problemas.append(
+            f"O parecer tem {len(blocos)} parágrafos antes das recomendações; use no máximo 2, curtos e sem repetição."
+        )
     return problemas
 
 

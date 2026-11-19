@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.2] - 2026-11-13
+
+### Melhorado
+- Revisor limita o parecer a 3 parágrafos antes das recomendações e detecta título simples (ex.: só o nome da empresa).
+- Revisor detecta frases genéricas ("análise mais aprofundada", "boa opção para investidores", "processo contínuo").
+- Prompt do redator: no máximo 2 parágrafos curtos, sem repetição e sem comentários genéricos.
+- Teste de regressão com o parecer real gerado pelo llama3.2:3b na v0.1.1.
+
 ## [0.1.1] - 2026-11-13
 
 ### Melhorado
